@@ -136,16 +136,23 @@
     .remove-button:hover {
       background-color: #c00034;
     }
+    /* Анімація для блоку результатів */
     .results {
       background-color: #4a4a4a;
       border-radius: 5px;
       padding: 10px;
       margin-top: 10px;
-      min-height: 50px;
       margin-bottom: 10px;
+      overflow: hidden;
+      transition: max-height 0.5s ease-out, opacity 0.5s ease-out;
     }
-    .results table {
-      margin-bottom: 0;
+    .results.collapsed {
+      max-height: 0;
+      opacity: 0;
+    }
+    .results.expanded {
+      max-height: 1000px;
+      opacity: 1;
     }
     .how-to-use {
       font-size: 0.9em;
@@ -165,13 +172,20 @@
       -webkit-appearance: none;
       margin: 0;
     }
-
     .merged-defect {
       background-color: #774f77 !important; 
     }
     .critical-distance {
       color: #B22222; 
       font-weight: bold;
+    }
+    /* Анімація для рядків таблиці дефектів */
+    #defectTable tbody tr {
+      transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+    }
+    .fade-out {
+      opacity: 0;
+      transform: translateY(20px);
     }
   </style>
 </head>
@@ -209,18 +223,17 @@
           </tr>
         </thead>
         <tbody>
-          <!-- Rows added dynamically -->
+          <!-- Рядки додаються динамічно -->
         </tbody>
       </table>
 
       <button id="btnAddRow" onclick="addRow()">Додати рядок</button>
       <button id="btnCalculate" onclick="calculate()">Обчислити</button>
 
-      <div class="results" id="results">
+      <div class="results collapsed" id="results">
         <pre id="resultsText">Результати з'являться тут...</pre>
       </div>
 
-      <!-- Блок для підсумкової інформації (відповідно до потреб) -->
       <div id="summary" style="font-weight: bold; margin-top:10px;"></div>
     </div>
 
@@ -274,7 +287,9 @@
       summaryRoll: "Final roll length", 
       summaryCut: "Total meters cut",
       lastDistanceMsg: "Distance from last defect to end",
-      finalLengthLabel: "Final length"  /* Новий ключ для фрази "Фінальна довжина" */
+      finalLengthLabel: "Final length",
+      rollLengthAlert: "Roll length cannot exceed 4050.",
+      startEndAlert: "Start value cannot be greater than End value."
     },
     UA: {
       headerTitle: "Калькулятор дефектів",
@@ -305,7 +320,9 @@
       summaryRoll: "Фінальна довжина рулону",
       summaryCut: "Всього метрів вирізано",
       lastDistanceMsg: "Відстань від останньої склейки до кінця",
-      finalLengthLabel: "Фінальна довжина" /* Новий ключ для "Фінальна довжина" */
+      finalLengthLabel: "Фінальна довжина",
+      rollLengthAlert: "Довжина рулону не може перевищувати 4050.",
+      startEndAlert: "Значення 'Початок' не може бути більшим за 'Кінець'."
     },
     PL: {
       headerTitle: "Kalkulator cięcia wad",
@@ -336,7 +353,9 @@
       summaryRoll: "Ostateczna długość rolki",
       summaryCut: "Całkowita długość wycięcia",
       lastDistanceMsg: "Odległość od ostatniej wady do końca",
-      finalLengthLabel: "Ostateczna długość" /* Новий ключ для "Фінальна довжина" */
+      finalLengthLabel: "Ostateczna długość",
+      rollLengthAlert: "Długość rolki nie może przekraczać 4050.",
+      startEndAlert: "Wartość 'Początek' nie może być większa niż 'Koniec'."
     }
   };
 
@@ -364,7 +383,7 @@
     document.getElementById("htuAddRow").innerHTML               = t.htuAddRow;
     document.getElementById("htuRemove").innerHTML               = t.htuRemove;
     document.getElementById("resultsText").textContent           = t.resultsPlaceholder;
-
+    
     renderResultsTable();
   }
 
@@ -387,9 +406,25 @@
   let finalDefects = [];
   let resultsData = [];
 
+  // Валідація поля "Довжина рулону" – значення не більше 4050
+  document.getElementById("rollLength").addEventListener("change", function() {
+      const rollVal = parseFloat(this.value) || 0;
+      if (rollVal > 4050) {
+          this.style.border = "2px solid red";
+          alert(translations[currentLang].rollLengthAlert);
+          this.focus();
+      } else {
+          this.style.border = "";
+      }
+  });
+
   function addRow(){
     const tableBody = document.getElementById("defectTable").getElementsByTagName("tbody")[0];
     const newRow = tableBody.insertRow();
+
+    // Встановлюємо початкові значення для плавного появи
+    newRow.style.opacity = "0";
+    newRow.style.transform = "translateY(-20px)";
 
     let cStart = newRow.insertCell(0);
     let inStart = document.createElement("input");
@@ -402,6 +437,11 @@
     inEnd.type = "number";
     inEnd.className = "defect-input";
     cEnd.appendChild(inEnd);
+
+    // Валідовувати лише при зміні значення у полі "Кінець"
+    inEnd.addEventListener("change", function() {
+         validateDefectRow(inStart, inEnd);
+    });
 
     let cName = newRow.insertCell(2);
     let sel = document.createElement("select");
@@ -421,11 +461,38 @@
     btnRem.textContent = "X";
     btnRem.onclick = ()=> removeRow(btnRem);
     cRem.appendChild(btnRem);
+
+    // Трохи затримки для запуску переходу
+    setTimeout(function(){
+      newRow.style.opacity = "1";
+      newRow.style.transform = "translateY(0)";
+    }, 10);
   }
 
   function removeRow(btn){
     const row = btn.parentNode.parentNode;
-    row.parentNode.removeChild(row);
+    // Додаємо клас для плавного зникнення
+    row.classList.add("fade-out");
+    // Після завершення переходу видаляємо рядок
+    setTimeout(function(){
+      if(row.parentNode) {
+         row.parentNode.removeChild(row);
+      }
+    }, 500);
+  }
+
+  // Функція валідації для пар "Початок" та "Кінець"
+  function validateDefectRow(startInput, endInput) {
+      const startVal = parseFloat(startInput.value) || 0;
+      const endVal = parseFloat(endInput.value) || 0;
+      if (startVal > endVal) {
+          startInput.style.border = "2px solid red";
+          alert(translations[currentLang].startEndAlert);
+          startInput.focus();
+      } else {
+          startInput.style.border = "";
+          endInput.style.border = "";
+      }
   }
 
   function unifyCloseDefects(defects, buffer){
@@ -584,11 +651,15 @@
 
     // Фінальна довжина
     let finalLength = rollLen - setup - totalCuts;
-    if(finalLength < 0) finalLength=0;
+    if(finalLength < 0) finalLength = 0;
+
+    const resultsDiv = document.getElementById("results");
 
     if(!resultsData || resultsData.length === 0){
-      document.getElementById("results").innerHTML = '<pre id="resultsText">'+ t.resultsPlaceholder +'</pre>';
+      resultsDiv.innerHTML = '<pre id="resultsText">'+ t.resultsPlaceholder +'</pre>';
       document.getElementById("summary").innerHTML = "";
+      resultsDiv.classList.remove("expanded");
+      resultsDiv.classList.add("collapsed");
       return;
     }
 
@@ -606,7 +677,7 @@
       if(i>0){
         const prev = resultsData[i-1];
         let dist = (r.firstEdgeNum||0) - (prev.firstEdgeNum||0);
-        if(isNaN(dist)) dist=0;
+        if(isNaN(dist)) dist = 0;
 
         let distClass = (dist < MIN_DISTANCE) ? 'critical-distance' : '';
         html += '<tr style="background-color:#666;" class="'+distClass+'">'
@@ -635,9 +706,9 @@
     const lastDef = resultsData[ resultsData.length - 1 ];
     let lastSpliceStart = lastDef.firstEdgeNum || 0;
     let distanceToEnd = finalLength - lastSpliceStart;
-    if(distanceToEnd<0) distanceToEnd=0;
+    if(distanceToEnd < 0) distanceToEnd = 0;
 
-    let remainDistClass = (distanceToEnd< MIN_DISTANCE) ? 'critical-distance' : '';
+    let remainDistClass = (distanceToEnd < MIN_DISTANCE) ? 'critical-distance' : '';
     html += '<tr style="background-color:#666;" class="'+remainDistClass+'">'
          +    '<td colspan="5" style="text-align:center; font-weight:bold;">'
          +      t.lastDistanceMsg + ': ' + distanceToEnd + ' ' + t.meterUnit
@@ -645,19 +716,23 @@
          +  '</tr>';
 
     html += '</tbody></table>';
-    document.getElementById("results").innerHTML = html;
+    resultsDiv.innerHTML = html;
 
-    // Підсумок: скільки вирізано і яка фінальна довжина
+    // Підсумок: вирізано метрів та фінальна довжина
     let summaryHTML = ''
       + '<div>'+ t.summaryCut +': '+ totalCuts +'</div>'
       + '<div style="margin-top:6px;">'+ t.finalLengthLabel +': '+ finalLength + ' ' + t.meterUnit +'</div>';
 
     document.getElementById("summary").innerHTML = summaryHTML;
+
+    // Додаємо клас для плавного відкриття блоку результатів
+    resultsDiv.classList.remove("collapsed");
+    resultsDiv.classList.add("expanded");
   }
 
   function onManualCutChange(i, newVal){
-    let cutLen = parseFloat(newVal)||0;
-    if(cutLen<0) cutLen=0;
+    let cutLen = parseFloat(newVal) || 0;
+    if(cutLen < 0) cutLen = 0;
     resultsData[i].manualCut = Math.round(cutLen);
 
     recalcFromIndex(i);
@@ -665,43 +740,43 @@
   }
 
   function recalcFromIndex(i){
-    const rollLen = parseFloat(document.getElementById("rollLength").value)||0;
-    const setup   = parseFloat(document.getElementById("setup").value)||0;
-    const buffer  = parseFloat(document.getElementById("buffer").value)||0;
+    const rollLen = parseFloat(document.getElementById("rollLength").value) || 0;
+    const setup   = parseFloat(document.getElementById("setup").value) || 0;
+    const buffer  = parseFloat(document.getElementById("buffer").value) || 0;
 
     let L_work = rollLen - setup;
-    if(L_work<0) L_work=0;
+    if(L_work < 0) L_work = 0;
 
-    for(let k=0; k<=i; k++){
+    for(let k = 0; k <= i; k++){
       L_work -= resultsData[k].manualCut;
-      if(L_work<0) L_work=0;
+      if(L_work < 0) L_work = 0;
     }
 
-    for(let k=i+1; k<resultsData.length; k++){
+    for(let k = i + 1; k < resultsData.length; k++){
       const d = finalDefects[k];
-      let defectLen = (d.B - d.A) + 2*buffer;
+      let defectLen = (d.B - d.A) + 2 * buffer;
       let realFirstEdge = L_work - d.B - buffer;
 
       let secondEdge = realFirstEdge + defectLen;
-      if(secondEdge> L_work){
+      if(secondEdge > L_work){
         secondEdge = L_work;
       } else {
         const distEnd = L_work - secondEdge;
-        if(distEnd>=0 && distEnd<MIN_DISTANCE){
+        if(distEnd >= 0 && distEnd < MIN_DISTANCE){
           secondEdge = L_work;
         }
       }
 
       let actualCut;
-      if(realFirstEdge< MIN_DISTANCE){
+      if(realFirstEdge < MIN_DISTANCE){
         actualCut = secondEdge;
       } else {
         actualCut = secondEdge - realFirstEdge;
       }
-      if(actualCut<0) actualCut=0;
+      if(actualCut < 0) actualCut = 0;
 
       L_work -= actualCut;
-      if(L_work<0) L_work=0;
+      if(L_work < 0) L_work = 0;
 
       let displayFirstEdge, firstEdgeNum;
       if(realFirstEdge < MIN_DISTANCE){
@@ -718,7 +793,7 @@
         secondEdgeStr = "0 m";
       } else if(secondEdge === (rollLen - setup)){
         secondEdgeStr = translations[currentLang].toEndLabel;
-      } else if(secondEdge === L_work && secondEdge>0){
+      } else if(secondEdge === L_work && secondEdge > 0){
         secondEdgeStr = translations[currentLang].toEndLabel;
       } else {
         secondEdgeStr = Math.round(secondEdge) + " m";
