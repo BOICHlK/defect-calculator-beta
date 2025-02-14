@@ -136,7 +136,7 @@
     .remove-button:hover {
       background-color: #c00034;
     }
-    /* Анімація для блоку результатів */
+    /* Блок результатів */
     .results {
       background-color: #4a4a4a;
       border-radius: 5px;
@@ -179,14 +179,27 @@
       color: #B22222; 
       font-weight: bold;
     }
-    /* Анімація для рядків таблиці дефектів */
+    /* Анімація появи рядка */
     #defectTable tbody tr {
       transition: opacity 0.5s ease-out, transform 0.5s ease-out;
       transform-origin: top;
     }
-    .collapse-out {
-      opacity: 0;
-      transform: translateY(20px) scaleY(0);
+    /* Стиль для блоку Excel (фоновий колір як у результатів) */
+    #excelExportBlock {
+      background-color: #4a4a4a;
+      padding: 10px;
+      border-radius: 3px;
+      margin-top: 10px;
+    }
+    #excelExportText {
+      width: 100%;
+      height: 150px;
+      background-color: #4a4a4a;
+      border: none;
+      resize: none;
+      font-family: monospace;
+      white-space: pre;
+      color: #fff;
     }
   </style>
 </head>
@@ -203,20 +216,17 @@
   </div>
 
   <div class="content">
-    <!-- Left Panel -->
+    <!-- Ліва панель -->
     <div class="left-panel">
       <label for="rollLength" id="labelRollLength">Довжина рулону</label>
       <div style="display: flex; align-items: center;">
         <input type="number" id="rollLength" placeholder="..." style="width:100%;" />
         <button id="btnReset" style="margin-left: 10px; padding: 6px 8px;" onclick="resetCalculator()">Перезавантажити</button>
       </div>
-
       <label for="setup" id="labelSetup">Заправка</label>
       <input type="number" id="setup" placeholder="..." style="width:100%;" />
-
       <label for="buffer" id="labelBuffer">Запас</label>
       <input type="number" id="buffer" placeholder="..." style="width:100%;" />
-
       <table id="defectTable">
         <thead>
           <tr>
@@ -230,18 +240,15 @@
           <!-- Рядки додаються динамічно -->
         </tbody>
       </table>
-
       <button id="btnAddRow" onclick="addRow()">Додати рядок</button>
       <button id="btnCalculate" onclick="calculate()">Обчислити</button>
-
       <div class="results collapsed" id="results">
-        <pre id="resultsText">Результати з'являться тут...</pre>
+        <pre id="resultsText">Результати з'являться туту2</pre>
       </div>
-
       <div id="summary" style="font-weight: bold; margin-top:10px;"></div>
     </div>
 
-    <!-- Right Panel -->
+    <!-- Права панель -->
     <div class="right-panel">
       <div class="how-to-use">
         <p><strong id="htuTitle">Як користуватися</strong></p>
@@ -251,6 +258,12 @@
         <p id="htuDefect"><strong>Початок і кінець дефекту:</strong> …</p>
         <p id="htuAddRow"><strong>Додати рядок:</strong> …</p>
         <p id="htuRemove"><strong>Видалити (X):</strong> …</p>
+      </div>
+      <!-- Блок для Excel -->
+      <div id="excelExportBlock">
+        <label for="excelExportText" id="excelExportLabel">Результати для Excel:</label>
+        <textarea id="excelExportText" readonly></textarea>
+        <button id="copyButton" onclick="copyToClipboard()">Скопіювати в буфер обміну</button>
       </div>
     </div>
   </div>
@@ -264,7 +277,6 @@
   // Константа для мінімальної відстані між дефектами
   const MIN_DISTANCE = 200;
 
-  // Додано ключ для кнопки скидання
   const translations = {
     EN: {
       headerTitle: "Defect Cutting Calculator",
@@ -298,7 +310,11 @@
       lastDistanceMsg: "Distance from last defect to end",
       finalLengthLabel: "Final length",
       rollLengthAlert: "Roll length cannot exceed 4050.",
-      startEndAlert: "Start value cannot be greater than End value."
+      startEndAlert: "Start value cannot be greater than End value.",
+      excelExportLabel: "Results for Excel:",
+      copySuccess: "Copied to clipboard",
+      copyError: "Error copying: ",
+      copyButton: "Copy to Clipboard"
     },
     UA: {
       headerTitle: "Калькулятор дефектів",
@@ -319,7 +335,7 @@
       htuDefect: "<strong>Початок і кінець дефекту:</strong> з першої прокрутки.",
       htuAddRow: "<strong>Додати рядок:</strong> додає новий дефект.",
       htuRemove: "<strong>Видалити (X):</strong> видаляє рядок.",
-      resultsPlaceholder: "Результати з'являться тут...",
+      resultsPlaceholder: "Результати з'являться туту2",
       mergedTag: "(об'єднано: відстань < 200)",
       unknownDefect: "Невідомий дефект",
       fromStart: "Від початку",
@@ -332,7 +348,11 @@
       lastDistanceMsg: "Відстань від останньої склейки до кінця",
       finalLengthLabel: "Фінальна довжина",
       rollLengthAlert: "Довжина рулону не може перевищувати 4050.",
-      startEndAlert: "Значення 'Початок' не може бути більшим за 'Кінець'."
+      startEndAlert: "Значення 'Початок' не може бути більшим за 'Кінець'.",
+      excelExportLabel: "Результати для Excel:",
+      copySuccess: "Скопійовано в буфер обміну",
+      copyError: "Помилка копіювання: ",
+      copyButton: "Скопіювати в буфер обміну"
     },
     PL: {
       headerTitle: "Kalkulator cięcia wad",
@@ -366,11 +386,14 @@
       lastDistanceMsg: "Odległość od ostatniej wady do końca",
       finalLengthLabel: "Ostateczna długość",
       rollLengthAlert: "Długość rolki nie może przekraczać 4050.",
-      startEndAlert: "Wartość 'Początek' nie może być większa niż 'Koniec'."
+      startEndAlert: "Wartość 'Początek' nie może być większa niż 'Koniec'.",
+      excelExportLabel: "Wyniki dla Excel:",
+      copySuccess: "Skopiowano do schowka",
+      copyError: "Błąd kopiowania: ",
+      copyButton: "Skopiuj do schowka"
     }
   };
 
-  // Функція збереження стану в localStorage
   function saveState() {
     const state = {
       rollLength: document.getElementById("rollLength").value,
@@ -389,7 +412,6 @@
     localStorage.setItem("defectCalculatorState", JSON.stringify(state));
   }
 
-  // Функція відновлення стану при завантаженні
   function loadState() {
     const stateStr = localStorage.getItem("defectCalculatorState");
     if (stateStr) {
@@ -439,13 +461,15 @@
         let btnRem = document.createElement("button");
         btnRem.className = "remove-button";
         btnRem.textContent = "X";
-        btnRem.onclick = () => removeRow(btnRem);
+        btnRem.onclick = () => {
+          btnRem.parentNode.parentNode.remove();
+          saveState();
+        };
         cRem.appendChild(btnRem);
       });
     }
   }
 
-  // Оновлення текстів елементів залежно від мови
   function updateLanguage(lang) {
     currentLang = lang;
     const t = translations[lang];
@@ -469,6 +493,8 @@
     document.getElementById("htuAddRow").innerHTML = t.htuAddRow;
     document.getElementById("htuRemove").innerHTML = t.htuRemove;
     document.getElementById("resultsText").textContent = t.resultsPlaceholder;
+    document.getElementById("excelExportLabel").textContent = t.excelExportLabel;
+    document.getElementById("copyButton").textContent = t.copyButton;
     
     renderResultsTable();
   }
@@ -492,7 +518,6 @@
   let finalDefects = [];
   let resultsData = [];
 
-  // Валідація поля "Довжина рулону"
   document.getElementById("rollLength").addEventListener("change", function() {
     const rollVal = parseFloat(this.value) || 0;
     if (rollVal > 4050) {
@@ -546,7 +571,10 @@
     let btnRem = document.createElement("button");
     btnRem.className = "remove-button";
     btnRem.textContent = "X";
-    btnRem.onclick = () => removeRow(btnRem);
+    btnRem.onclick = () => {
+      btnRem.parentNode.parentNode.remove();
+      saveState();
+    };
     cRem.appendChild(btnRem);
 
     setTimeout(function(){
@@ -556,18 +584,6 @@
     }, 10);
   }
 
-  function removeRow(btn) {
-    const row = btn.parentNode.parentNode;
-    row.classList.add("collapse-out");
-    setTimeout(function() {
-      if (row.parentNode) {
-        row.parentNode.removeChild(row);
-        saveState();
-      }
-    }, 500);
-  }
-
-  // Валідація для пар "Початок" та "Кінець"
   function validateDefectRow(startInput, endInput) {
     const startVal = parseFloat(startInput.value) || 0;
     const endVal = parseFloat(endInput.value) || 0;
@@ -581,13 +597,14 @@
     }
   }
 
+  // Об'єднання дефектів із збереженням початкової назви (firstName)
   function unifyCloseDefects(defects, buffer) {
     const t = translations[currentLang];
     defects.sort((a, b) => a.A - b.A);
     const merged = [];
     let i = 0;
     while (i < defects.length) {
-      let current = { ...defects[i] };
+      let current = { ...defects[i], firstName: defects[i].name };
       let j = i + 1;
       let hasMerged = false;
       while (j < defects.length) {
@@ -696,11 +713,13 @@
       arr.push({
         index: i,
         name: d.name,
+        firstName: d.firstName, // назва першого дефекту, якщо об'єднано
         firstEdge: displayFirstEdge,
         firstEdgeNum: firstEdgeNum,
         secondEdgeNum: Math.round(secondEdge),
         secondEdgeText: secondEdgeStr,
         recommendedCut: Math.round(actualCut),
+        // Для внутрішніх розрахунків – використовується manualCut
         manualCut: Math.round(actualCut)
       });
     }
@@ -722,6 +741,7 @@
       document.getElementById("summary").innerHTML = "";
       resultsDiv.classList.remove("expanded");
       resultsDiv.classList.add("collapsed");
+      document.getElementById("excelExportText").value = "";
       return;
     }
     let html = '<table><thead><tr>'
@@ -748,11 +768,14 @@
       if (r.name.includes(t.mergedTag)) {
         mergedClass = 'merged-defect';
       }
+      // Значення поля "До вирізання" для розрахунків – використовується manualCut,
+      // а для експорту ми беремо значення, якщо користувач його змінив (excelManualCut)
+      let displayManual = (r.excelManualCut !== undefined ? r.excelManualCut : r.manualCut);
       html += '<tr class="' + mergedClass + '">'
         + '<td>' + (i + 1) + '</td>'
         + '<td>' + r.name + '</td>'
         + '<td>' + r.firstEdge + '</td>'
-        + '<td><input type="number" value="' + r.manualCut + '" min="0" style="width:80px" onchange="onManualCutChange(' + i + ', this.value)" /></td>'
+        + '<td><input type="number" value="' + displayManual + '" min="0" style="width:80px" onchange="onManualCutChange(' + i + ', this.value)" /></td>'
         + '<td>' + r.secondEdgeText + '</td>'
         + '</tr>';
     }
@@ -774,17 +797,36 @@
     document.getElementById("summary").innerHTML = summaryHTML;
     resultsDiv.classList.remove("collapsed");
     resultsDiv.classList.add("expanded");
+    
+    // Формування тексту для Excel:
+    // Додаємо порожню першу строчку, а потім для кожного дефекту:
+    // Рядок 1: перша межа,
+    // Рядок 2: друга межа = (firstEdgeNum) + (якщо excelManualCut задано, використати його, інакше manualCut)
+    // Рядок 3: назва дефекту (якщо об'єднано, використовуємо firstName)
+    // Потім порожній рядок.
+    let excelExportText = "\n"; // пустий перший рядок
+    resultsData.forEach((r, i) => {
+      let manualValue = (r.excelManualCut !== undefined ? r.excelManualCut : r.manualCut);
+      let exportSecondEdge = (r.firstEdgeNum || 0) + manualValue;
+      let defectNameForExcel = r.firstName || r.name;
+      excelExportText += (r.firstEdgeNum || 0) + "\n" + exportSecondEdge + "\n" + defectNameForExcel + "\n\n";
+    });
+    document.getElementById("excelExportText").value = excelExportText;
   }
 
+  // При зміні значення "До вирізання" для дефекту оновлюємо і внутрішнє значення (manualCut) та значення для експорту (excelManualCut)
   function onManualCutChange(i, newVal) {
-    let cutLen = parseFloat(newVal) || 0;
-    if (cutLen < 0) cutLen = 0;
+    let cutLen = parseFloat(newVal);
+    if (isNaN(cutLen) || cutLen < 0) cutLen = 0;
+    // Оновлюємо обидва поля – так внутрішні розрахунки будуть перераховані
     resultsData[i].manualCut = Math.round(cutLen);
+    resultsData[i].excelManualCut = Math.round(cutLen);
     recalcFromIndex(i);
     renderResultsTable();
     saveState();
   }
 
+  // recalcFromIndex – внутрішня логіка обчислень (не враховує excelManualCut)
   function recalcFromIndex(i) {
     const rollLen = parseFloat(document.getElementById("rollLength").value) || 0;
     const setup = parseFloat(document.getElementById("setup").value) || 0;
@@ -845,19 +887,25 @@
     }
   }
 
-  // Функція скидання (reset) калькулятора:
-  // Скидаються всі значення, крім полів "Заправка" та "Запас"
   function resetCalculator() {
     document.getElementById("rollLength").value = "";
-    // Очищення таблиці дефектів
     document.getElementById("defectTable").getElementsByTagName("tbody")[0].innerHTML = "";
-    // Очищення блоку результатів та підсумку
     const t = translations[currentLang];
     document.getElementById("results").innerHTML = '<pre id="resultsText">' + t.resultsPlaceholder + '</pre>';
     document.getElementById("summary").innerHTML = "";
+    document.getElementById("excelExportText").value = "";
     finalDefects = [];
     resultsData = [];
     saveState();
+  }
+
+  function copyToClipboard() {
+    const text = document.getElementById("excelExportText").value;
+    navigator.clipboard.writeText(text).then(() => {
+      alert(translations[currentLang].copySuccess);
+    }).catch(err => {
+      alert(translations[currentLang].copyError + err);
+    });
   }
 
   window.addEventListener("load", () => {
