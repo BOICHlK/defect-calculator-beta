@@ -79,7 +79,8 @@
       font-weight: bold;
     }
     input[type="number"],
-    select {
+    select,
+    input[type="text"] {
       margin-bottom: 10px;
       padding: 10px;
       box-sizing: border-box;
@@ -261,6 +262,9 @@
       </div>
       <!-- Блок для Excel -->
       <div id="excelExportBlock">
+        <label for="excelPrefix" id="excelPrefixLabel">Prefix:</label>
+        <input type="text" id="excelPrefix" maxlength="3" style="width:80px;" placeholder=" "/>
+        <br/>
         <label for="excelExportText" id="excelExportLabel">Результати для Excel:</label>
         <textarea id="excelExportText" readonly></textarea>
         <button id="copyButton" onclick="copyToClipboard()">Скопіювати в буфер обміну</button>
@@ -312,6 +316,7 @@
       rollLengthAlert: "Roll length cannot exceed 4050.",
       startEndAlert: "Start value cannot be greater than End value.",
       excelExportLabel: "Results for Excel:",
+      excelPrefixLabel: "ID:",
       copySuccess: "Copied to clipboard",
       copyError: "Error copying: ",
       copyButton: "Copy to Clipboard"
@@ -350,6 +355,7 @@
       rollLengthAlert: "Довжина рулону не може перевищувати 4050.",
       startEndAlert: "Значення 'Початок' не може бути більшим за 'Кінець'.",
       excelExportLabel: "Результати для Excel:",
+      excelPrefixLabel: "ID:",
       copySuccess: "Скопійовано в буфер обміну",
       copyError: "Помилка копіювання: ",
       copyButton: "Скопіювати в буфер обміну"
@@ -388,6 +394,7 @@
       rollLengthAlert: "Długość rolki nie może przekraczać 4050.",
       startEndAlert: "Wartość 'Początek' nie może być większa niż 'Koniec'.",
       excelExportLabel: "Wyniki dla Excel:",
+      excelPrefixLabel: "ID:",
       copySuccess: "Skopiowano do schowka",
       copyError: "Błąd kopiowania: ",
       copyButton: "Skopiuj do schowka"
@@ -494,6 +501,7 @@
     document.getElementById("htuRemove").innerHTML = t.htuRemove;
     document.getElementById("resultsText").textContent = t.resultsPlaceholder;
     document.getElementById("excelExportLabel").textContent = t.excelExportLabel;
+    document.getElementById("excelPrefixLabel").textContent = t.excelPrefixLabel;
     document.getElementById("copyButton").textContent = t.copyButton;
     
     renderResultsTable();
@@ -719,7 +727,6 @@
         secondEdgeNum: Math.round(secondEdge),
         secondEdgeText: secondEdgeStr,
         recommendedCut: Math.round(actualCut),
-        // Для внутрішніх розрахунків – використовується manualCut
         manualCut: Math.round(actualCut)
       });
     }
@@ -768,8 +775,6 @@
       if (r.name.includes(t.mergedTag)) {
         mergedClass = 'merged-defect';
       }
-      // Значення поля "До вирізання" для розрахунків – використовується manualCut,
-      // а для експорту ми беремо значення, якщо користувач його змінив (excelManualCut)
       let displayManual = (r.excelManualCut !== undefined ? r.excelManualCut : r.manualCut);
       html += '<tr class="' + mergedClass + '">'
         + '<td>' + (i + 1) + '</td>'
@@ -798,27 +803,27 @@
     resultsDiv.classList.remove("collapsed");
     resultsDiv.classList.add("expanded");
     
-    // Формування тексту для Excel:
-    // Додаємо порожню першу строчку, а потім для кожного дефекту:
-    // Рядок 1: перша межа,
-    // Рядок 2: друга межа = (firstEdgeNum) + (якщо excelManualCut задано, використати його, інакше manualCut)
-    // Рядок 3: назва дефекту (якщо об'єднано, використовуємо firstName)
-    // Потім порожній рядок.
-    let excelExportText = "\n"; // пустий перший рядок
+    // Отримуємо значення префікса з поля excelPrefix (якщо пусто – використовується порожній рядок)
+    let prefix = document.getElementById("excelPrefix").value || "";
+    // Формуємо текст для Excel:
+    // Для кожного дефекту: 4 рядки без пропусків:
+    // 1) Префікс,
+    // 2) Перша межа (firstEdgeNum),
+    // 3) Друга межа = firstEdgeNum + (excelManualCut, якщо задано, інакше manualCut),
+    // 4) Назва дефекту (якщо об'єднано, використовуємо firstName)
+    let excelExportText = "";
     resultsData.forEach((r, i) => {
       let manualValue = (r.excelManualCut !== undefined ? r.excelManualCut : r.manualCut);
       let exportSecondEdge = (r.firstEdgeNum || 0) + manualValue;
       let defectNameForExcel = r.firstName || r.name;
-      excelExportText += (r.firstEdgeNum || 0) + "\n" + exportSecondEdge + "\n" + defectNameForExcel + "\n\n";
+      excelExportText += prefix + "\n" + (r.firstEdgeNum || 0) + "\n" + exportSecondEdge + "\n" + defectNameForExcel + "\n";
     });
     document.getElementById("excelExportText").value = excelExportText;
   }
 
-  // При зміні значення "До вирізання" для дефекту оновлюємо і внутрішнє значення (manualCut) та значення для експорту (excelManualCut)
   function onManualCutChange(i, newVal) {
     let cutLen = parseFloat(newVal);
     if (isNaN(cutLen) || cutLen < 0) cutLen = 0;
-    // Оновлюємо обидва поля – так внутрішні розрахунки будуть перераховані
     resultsData[i].manualCut = Math.round(cutLen);
     resultsData[i].excelManualCut = Math.round(cutLen);
     recalcFromIndex(i);
@@ -826,7 +831,6 @@
     saveState();
   }
 
-  // recalcFromIndex – внутрішня логіка обчислень (не враховує excelManualCut)
   function recalcFromIndex(i) {
     const rollLen = parseFloat(document.getElementById("rollLength").value) || 0;
     const setup = parseFloat(document.getElementById("setup").value) || 0;
